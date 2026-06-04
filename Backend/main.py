@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_ollama import OllamaLLM
+from langchain_groq import ChatGroq
 
 app = FastAPI()
 
@@ -64,8 +64,8 @@ def ask_question(question: str = Query(...)):
 
     context = "\n\n".join([doc.page_content for doc in docs])
 
-    llm = OllamaLLM(
-        model="llama3"
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile"
     )
 
     prompt = f"""

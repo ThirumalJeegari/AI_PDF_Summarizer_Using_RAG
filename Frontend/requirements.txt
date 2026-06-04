@@ -1,12 +1,2 @@
-fastapi
-uvicorn
 streamlit
 requests
-langchain
-langchain-community
-langchain-huggingface
-langchain-text-splitters
-chromadb
-sentence-transformers
-pypdf
-ollama
