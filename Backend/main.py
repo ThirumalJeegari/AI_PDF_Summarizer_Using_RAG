@@ -2,8 +2,6 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi import Query
 import shutil
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_groq import ChatGroq
 
@@ -18,6 +16,9 @@ def home():
 
 @app.post("/uploads")
 async def upload_pdf(file: UploadFile = File(...)):
+
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_community.vectorstores import Chroma
 
     with open(file.filename, "wb") as f:
         shutil.copyfileobj(file.file, f)
@@ -48,6 +49,11 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
+
+
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_community.vectorstores import Chroma
+
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
