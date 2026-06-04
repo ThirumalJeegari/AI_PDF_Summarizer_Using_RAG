@@ -1,14 +1,11 @@
 import streamlit as st
 import requests
-import os
 
+st.set_page_config(page_title="AI PDF Chatbot")
 
-st.title("AI PDF Chatbot Using RAG")
+st.title("📄 AI PDF Chatbot Using RAG")
 
-server_url =  st.secrets["backend_url"]
-
-import streamlit as st
-
+server_url = "http://127.0.0.1:8000"
 
 if "pdf_uploaded" not in st.session_state:
     st.session_state.pdf_uploaded = False
@@ -16,11 +13,11 @@ if "pdf_uploaded" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Upload PDF
+# Upload Section
 if not st.session_state.pdf_uploaded:
 
     uploaded_file = st.file_uploader(
-        "Upload Your PDF",
+        "Upload PDF",
         type=["pdf"]
     )
 
@@ -34,22 +31,29 @@ if not st.session_state.pdf_uploaded:
             )
         }
 
-        response = requests.post(
-            f"{server_url}/uploads",
-            files=files
-        )
+        with st.spinner("Uploading PDF..."):
+
+            response = requests.post(
+                f"{server_url}/uploads",
+                files=files
+            )
 
         if response.status_code == 200:
-            st.success(response.json()["msg"])
+
+            st.success(
+                response.json()["msg"]
+            )
+
             st.session_state.pdf_uploaded = True
             st.rerun()
+
         else:
             st.error(response.text)
 
-# Chat Area
+# Chat Section
 if st.session_state.pdf_uploaded:
 
-    st.success("PDF Uploaded Successfully")
+    st.success("PDF Ready for Questions")
 
     for msg in st.session_state.messages:
 
@@ -57,7 +61,7 @@ if st.session_state.pdf_uploaded:
             st.write(msg["content"])
 
     question = st.chat_input(
-        "Ask anything about the PDF..."
+        "Ask anything about your PDF..."
     )
 
     if question:
@@ -74,7 +78,7 @@ if st.session_state.pdf_uploaded:
 
         with st.chat_message("assistant"):
 
-            with st.spinner("🤖 Thinking..."):
+            with st.spinner("Thinking..."):
 
                 response = requests.post(
                     f"{server_url}/ask",
@@ -82,9 +86,12 @@ if st.session_state.pdf_uploaded:
                 )
 
                 if response.status_code == 200:
+
                     answer = response.json()["answer"]
+
                 else:
-                    answer = response.text
+
+                    answer = "Backend Error"
 
             st.write(answer)
 

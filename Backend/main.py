@@ -4,11 +4,16 @@ import os
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
+import streamlit as st
 
 app = FastAPI()
 
 os.makedirs("uploads", exist_ok=True)
+
+GROQ_API_KEY = st.secrets["api_key"]
 
 
 @app.get("/")
@@ -20,9 +25,6 @@ def home():
 
 @app.post("/uploads")
 async def upload_pdf(file: UploadFile = File(...)):
-
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_community.vectorstores import Chroma
 
     file_path = f"uploads/{file.filename}"
 
@@ -57,9 +59,6 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
 
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_community.vectorstores import Chroma
-
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -77,7 +76,7 @@ def ask_question(question: str = Query(...)):
 
     if not docs:
         return {
-            "answer": "No relevant information found."
+            "answer": "No relevant information found in PDF."
         }
 
     context = "\n\n".join(
@@ -86,11 +85,11 @@ def ask_question(question: str = Query(...)):
 
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
-        api_key=os.getenv("GROQ_API_KEY")
+        api_key=GROQ_API_KEY
     )
 
     prompt = f"""
-    Answer the question using only the provided context.
+    Answer the question using only the given context.
 
     Context:
     {context}
@@ -101,9 +100,9 @@ def ask_question(question: str = Query(...)):
     Answer:
     """
 
-    answer = llm.invoke(prompt)
+    response = llm.invoke(prompt)
 
     return {
         "question": question,
-        "answer": answer.content
+        "answer": response.content
     }
