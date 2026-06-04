@@ -3,7 +3,11 @@ import requests
 
 st.title("AI PDF Chatbot Using RAG")
 
-server_url = "http://127.0.0.1:8000"
+server_url =  st.secrets["backend_url"]
+
+import streamlit as st
+
+groq_api_key = st.secrets["api_key"]
 
 if "pdf_uploaded" not in st.session_state:
     st.session_state.pdf_uploaded = False
