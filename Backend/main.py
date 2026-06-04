@@ -1,19 +1,21 @@
 from fastapi import FastAPI, UploadFile, File, Query
 import shutil
 import os
+from dotenv import load_dotenv
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
-import streamlit as st
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("api_key")
 
 app = FastAPI()
 
 os.makedirs("uploads", exist_ok=True)
-
-GROQ_API_KEY = st.secrets["api_key"]
 
 
 @app.get("/")
