@@ -1,11 +1,15 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi import Query
+from fastapi import FastAPI, UploadFile, File, Query
 import shutil
+import os
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_groq import ChatGroq
 
 app = FastAPI()
+
+os.makedirs("uploads", exist_ok=True)
+
 
 @app.get("/")
 def home():
@@ -20,10 +24,12 @@ async def upload_pdf(file: UploadFile = File(...)):
     from langchain_huggingface import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
 
-    with open(file.filename, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    loader = PyPDFLoader(file.filename)
+    file_path = f"uploads/{file.filename}"
 
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    loader = PyPDFLoader(file_path)
     docs = loader.load()
 
     splitter = RecursiveCharacterTextSplitter(
@@ -47,9 +53,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         "msg": "PDF Uploaded Successfully"
     }
 
+
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
-
 
     from langchain_huggingface import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
@@ -57,6 +63,7 @@ def ask_question(question: str = Query(...)):
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
+
     db = Chroma(
         persist_directory="Chroma_DB",
         embedding_function=embedding_model
@@ -66,16 +73,24 @@ def ask_question(question: str = Query(...)):
         search_kwargs={"k": 3}
     )
 
-    docs = retriever.get_relevant_documents(question)
+    docs = retriever.invoke(question)
 
-    context = "\n\n".join([doc.page_content for doc in docs])
+    if not docs:
+        return {
+            "answer": "No relevant information found in PDF."
+        }
+
+    context = "\n\n".join(
+        [doc.page_content for doc in docs]
+    )
 
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile"
+        model="llama-3.3-70b-versatile",
+        api_key=os.getenv("GROQ_API_KEY")
     )
 
     prompt = f"""
-    Answer the question using only the provided context.
+    Answer the question using only the context.
 
     Context:
     {context}
@@ -90,5 +105,5 @@ def ask_question(question: str = Query(...)):
 
     return {
         "question": question,
-        "answer": answer
+        "answer": str(answer)
     }
