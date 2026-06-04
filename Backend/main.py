@@ -77,7 +77,7 @@ def ask_question(question: str = Query(...)):
 
     if not docs:
         return {
-            "answer": "No relevant information found in PDF."
+            "answer": "No relevant information found."
         }
 
     context = "\n\n".join(
@@ -90,7 +90,7 @@ def ask_question(question: str = Query(...)):
     )
 
     prompt = f"""
-    Answer the question using only the context.
+    Answer the question using only the provided context.
 
     Context:
     {context}
@@ -105,5 +105,5 @@ def ask_question(question: str = Query(...)):
 
     return {
         "question": question,
-        "answer": str(answer)
+        "answer": answer.content
     }
