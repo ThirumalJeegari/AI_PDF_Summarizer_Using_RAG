@@ -5,7 +5,7 @@ st.set_page_config(page_title="AI PDF Chatbot")
 
 st.title("📄 AI PDF Chatbot Using RAG")
 
-server_url = "http://127.0.0.1:8000"
+server_url = st.secrets["backend_url"]
 
 if "pdf_uploaded" not in st.session_state:
     st.session_state.pdf_uploaded = False
