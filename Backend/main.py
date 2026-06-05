@@ -24,7 +24,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-os.makedirs("uploads", exist_ok=True)
+UPLOAD_DIR = "uploads"
+CHROMA_DIR = "Chroma_DB"
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 embedding_model = FastEmbedEmbeddings(
     model_name="BAAI/bge-small-en-v1.5"
@@ -49,7 +52,17 @@ def health():
 async def upload_pdf(file: UploadFile = File(...)):
 
     try:
-        file_path = f"uploads/{file.filename}"
+        if not file.filename.endswith(".pdf"):
+            return {
+                "error": "Please upload only PDF file."
+            }
+
+        # Remove old Chroma DB before uploading new PDF
+        if os.path.exists(CHROMA_DIR):
+            shutil.rmtree(CHROMA_DIR)
+
+        safe_filename = file.filename.replace(" ", "_")
+        file_path = os.path.join(UPLOAD_DIR, safe_filename)
 
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
@@ -57,9 +70,14 @@ async def upload_pdf(file: UploadFile = File(...)):
         loader = PyPDFLoader(file_path)
         docs = loader.load()
 
+        if not docs:
+            return {
+                "error": "No text found in PDF."
+            }
+
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
+            chunk_size=800,
+            chunk_overlap=100
         )
 
         chunks = splitter.split_documents(docs)
@@ -67,7 +85,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         Chroma.from_documents(
             documents=chunks,
             embedding=embedding_model,
-            persist_directory="Chroma_DB"
+            persist_directory=CHROMA_DIR
         )
 
         return {
@@ -76,7 +94,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     except Exception as e:
         return {
-            "error": str(e)
+            "error": f"Upload failed: {str(e)}"
         }
 
 
@@ -89,8 +107,13 @@ def ask_question(question: str = Query(...)):
                 "answer": "GROQ_API_KEY is missing in Render environment variables."
             }
 
+        if not os.path.exists(CHROMA_DIR):
+            return {
+                "answer": "Please upload a PDF first."
+            }
+
         db = Chroma(
-            persist_directory="Chroma_DB",
+            persist_directory=CHROMA_DIR,
             embedding_function=embedding_model
         )
 
@@ -115,16 +138,16 @@ def ask_question(question: str = Query(...)):
         )
 
         prompt = f"""
-        Answer the question using only the given context.
+Answer the question using only the given context.
 
-        Context:
-        {context}
+Context:
+{context}
 
-        Question:
-        {question}
+Question:
+{question}
 
-        Answer:
-        """
+Answer:
+"""
 
         response = llm.invoke(prompt)
 
