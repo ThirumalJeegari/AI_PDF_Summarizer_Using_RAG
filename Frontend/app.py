@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import requests
 
@@ -5,7 +6,9 @@ st.set_page_config(page_title="AI PDF Chatbot")
 
 st.title("📄 AI PDF Chatbot Using RAG")
 
-server_url = "http://localhost:8000"
+# Local: http://localhost:8000
+# Render: add BACKEND_URL=https://your-backend-service.onrender.com
+server_url = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 if "pdf_uploaded" not in st.session_state:
     st.session_state.pdf_uploaded = False
@@ -33,10 +36,15 @@ if not st.session_state.pdf_uploaded:
 
         with st.spinner("Uploading PDF..."):
 
-            response = requests.post(
-                f"{server_url}/uploads",
-                files=files
-            )
+            try:
+                response = requests.post(
+                    f"{server_url}/uploads",
+                    files=files,
+                    timeout=120
+                )
+            except requests.exceptions.RequestException as e:
+                st.error(f"Backend connection error: {e}")
+                st.stop()
 
         if response.status_code == 200:
 
@@ -80,18 +88,22 @@ if st.session_state.pdf_uploaded:
 
             with st.spinner("Thinking..."):
 
-                response = requests.post(
-                    f"{server_url}/ask",
-                    params={"question": question}
-                )
-
-                if response.status_code == 200:
-
-                    answer = response.json()["answer"]
-
+                try:
+                    response = requests.post(
+                        f"{server_url}/ask",
+                        params={"question": question},
+                        timeout=120
+                    )
+                except requests.exceptions.RequestException as e:
+                    answer = f"Backend connection error: {e}"
                 else:
+                    if response.status_code == 200:
 
-                    answer = "Backend Error"
+                        answer = response.json()["answer"]
+
+                    else:
+
+                        answer = f"Backend Error: {response.text}"
 
             st.write(answer)
 

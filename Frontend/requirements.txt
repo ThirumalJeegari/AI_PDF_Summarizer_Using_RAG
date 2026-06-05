@@ -2,6 +2,7 @@ fastapi
 uvicorn
 streamlit
 requests
+python-dotenv
 
 langchain
 langchain-community

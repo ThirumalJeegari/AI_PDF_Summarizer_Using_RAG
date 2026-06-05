@@ -1,11 +1,17 @@
 fastapi
 uvicorn
+streamlit
+requests
+python-dotenv
+
 langchain
 langchain-community
 langchain-huggingface
 langchain-text-splitters
 langchain-groq
+
 chromadb
 sentence-transformers
+
 pypdf
 python-multipart

@@ -11,7 +11,9 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("api_key")
+# In Render, add GROQ_API_KEY in Environment Variables
+# api_key is also supported for your old local .env name
+GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("api_key")
 
 app = FastAPI()
 
@@ -60,6 +62,11 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
+
+    if not GROQ_API_KEY:
+        return {
+            "answer": "GROQ_API_KEY is missing. Add it in Render Environment Variables."
+        }
 
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
