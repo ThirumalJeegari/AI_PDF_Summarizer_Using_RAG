@@ -1,14 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
-import shutil
 import os
+import shutil
 from dotenv import load_dotenv
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import FastEmbedEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_groq import ChatGroq
+from pypdf import PdfReader
+import chromadb
+from fastembed import TextEmbedding
+from groq import Groq
 
 load_dotenv()
 
@@ -26,10 +24,11 @@ app.add_middleware(
 
 UPLOAD_DIR = "uploads"
 CHROMA_DIR = "Chroma_DB"
+COLLECTION_NAME = "pdf_collection"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-embedding_model = FastEmbedEmbeddings(
+embedding_model = TextEmbedding(
     model_name="BAAI/bge-small-en-v1.5"
 )
 
@@ -48,16 +47,31 @@ def health():
     }
 
 
+def split_text(text, chunk_size=800, chunk_overlap=100):
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+
+        if chunk.strip():
+            chunks.append(chunk)
+
+        start = end - chunk_overlap
+
+    return chunks
+
+
 @app.post("/uploads")
 async def upload_pdf(file: UploadFile = File(...)):
 
     try:
-        if not file.filename.endswith(".pdf"):
+        if not file.filename.lower().endswith(".pdf"):
             return {
-                "error": "Please upload only PDF file."
+                "error": "Please upload only PDF files."
             }
 
-        # Remove old Chroma DB before uploading new PDF
         if os.path.exists(CHROMA_DIR):
             shutil.rmtree(CHROMA_DIR)
 
@@ -67,25 +81,38 @@ async def upload_pdf(file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        loader = PyPDFLoader(file_path)
-        docs = loader.load()
+        reader = PdfReader(file_path)
 
-        if not docs:
+        full_text = ""
+
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                full_text += page_text + "\n"
+
+        if not full_text.strip():
             return {
                 "error": "No text found in PDF."
             }
 
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=800,
-            chunk_overlap=100
+        chunks = split_text(full_text)
+
+        client = chromadb.PersistentClient(path=CHROMA_DIR)
+
+        collection = client.get_or_create_collection(
+            name=COLLECTION_NAME
         )
 
-        chunks = splitter.split_documents(docs)
+        embeddings = list(
+            embedding_model.embed(chunks)
+        )
 
-        Chroma.from_documents(
+        ids = [f"chunk_{i}" for i in range(len(chunks))]
+
+        collection.add(
             documents=chunks,
-            embedding=embedding_model,
-            persist_directory=CHROMA_DIR
+            embeddings=[embedding.tolist() for embedding in embeddings],
+            ids=ids
         )
 
         return {
@@ -112,28 +139,31 @@ def ask_question(question: str = Query(...)):
                 "answer": "Please upload a PDF first."
             }
 
-        db = Chroma(
-            persist_directory=CHROMA_DIR,
-            embedding_function=embedding_model
+        client = chromadb.PersistentClient(path=CHROMA_DIR)
+
+        collection = client.get_collection(
+            name=COLLECTION_NAME
         )
 
-        retriever = db.as_retriever(
-            search_kwargs={"k": 3}
+        question_embedding = list(
+            embedding_model.embed([question])
+        )[0]
+
+        results = collection.query(
+            query_embeddings=[question_embedding.tolist()],
+            n_results=3
         )
 
-        docs = retriever.invoke(question)
+        documents = results["documents"][0]
 
-        if not docs:
+        if not documents:
             return {
                 "answer": "No relevant information found in PDF."
             }
 
-        context = "\n\n".join(
-            [doc.page_content for doc in docs]
-        )
+        context = "\n\n".join(documents)
 
-        llm = ChatGroq(
-            model="llama-3.3-70b-versatile",
+        groq_client = Groq(
             api_key=GROQ_API_KEY
         )
 
@@ -149,11 +179,21 @@ Question:
 Answer:
 """
 
-        response = llm.invoke(prompt)
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+
+        answer = response.choices[0].message.content
 
         return {
             "question": question,
-            "answer": response.content
+            "answer": answer
         }
 
     except Exception as e:
