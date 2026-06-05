@@ -1,14 +1,12 @@
-import os
 import streamlit as st
 import requests
+import os
 
 st.set_page_config(page_title="AI PDF Chatbot")
 
 st.title("📄 AI PDF Chatbot Using RAG")
 
-# Local: http://localhost:8000
-# Render: add BACKEND_URL=https://your-backend-service.onrender.com
-server_url = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+server_url = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 if "pdf_uploaded" not in st.session_state:
     st.session_state.pdf_uploaded = False
@@ -16,7 +14,7 @@ if "pdf_uploaded" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Upload Section
+
 if not st.session_state.pdf_uploaded:
 
     uploaded_file = st.file_uploader(
@@ -39,26 +37,25 @@ if not st.session_state.pdf_uploaded:
             try:
                 response = requests.post(
                     f"{server_url}/uploads",
-                    files=files,
-                    timeout=120
+                    files=files
                 )
-            except requests.exceptions.RequestException as e:
+
+                if response.status_code == 200:
+
+                    st.success(
+                        response.json()["msg"]
+                    )
+
+                    st.session_state.pdf_uploaded = True
+                    st.rerun()
+
+                else:
+                    st.error(response.text)
+
+            except Exception as e:
                 st.error(f"Backend connection error: {e}")
-                st.stop()
 
-        if response.status_code == 200:
 
-            st.success(
-                response.json()["msg"]
-            )
-
-            st.session_state.pdf_uploaded = True
-            st.rerun()
-
-        else:
-            st.error(response.text)
-
-# Chat Section
 if st.session_state.pdf_uploaded:
 
     st.success("PDF Ready for Questions")
@@ -91,19 +88,19 @@ if st.session_state.pdf_uploaded:
                 try:
                     response = requests.post(
                         f"{server_url}/ask",
-                        params={"question": question},
-                        timeout=120
+                        params={"question": question}
                     )
-                except requests.exceptions.RequestException as e:
-                    answer = f"Backend connection error: {e}"
-                else:
+
                     if response.status_code == 200:
 
                         answer = response.json()["answer"]
 
                     else:
 
-                        answer = f"Backend Error: {response.text}"
+                        answer = "Backend Error"
+
+                except Exception as e:
+                    answer = f"Backend connection error: {e}"
 
             st.write(answer)
 

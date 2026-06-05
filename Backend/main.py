@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Query
+from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
 from dotenv import load_dotenv
@@ -11,11 +12,17 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
-# In Render, add GROQ_API_KEY in Environment Variables
-# api_key is also supported for your old local .env name
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("api_key")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 os.makedirs("uploads", exist_ok=True)
 
@@ -24,6 +31,13 @@ os.makedirs("uploads", exist_ok=True)
 def home():
     return {
         "message": "Backend Running Successfully"
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
     }
 
 
@@ -63,11 +77,6 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
 
-    if not GROQ_API_KEY:
-        return {
-            "answer": "GROQ_API_KEY is missing. Add it in Render Environment Variables."
-        }
-
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -91,6 +100,11 @@ def ask_question(question: str = Query(...)):
     context = "\n\n".join(
         [doc.page_content for doc in docs]
     )
+
+    if not GROQ_API_KEY:
+        return {
+            "answer": "GROQ_API_KEY is missing. Please add it in Render environment variables."
+        }
 
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
