@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 
@@ -26,6 +26,10 @@ app.add_middleware(
 
 os.makedirs("uploads", exist_ok=True)
 
+embedding_model = FastEmbedEmbeddings(
+    model_name="BAAI/bge-small-en-v1.5"
+)
+
 
 @app.get("/")
 def home():
@@ -44,88 +48,92 @@ def health():
 @app.post("/uploads")
 async def upload_pdf(file: UploadFile = File(...)):
 
-    file_path = f"uploads/{file.filename}"
+    try:
+        file_path = f"uploads/{file.filename}"
 
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
 
-    loader = PyPDFLoader(file_path)
-    docs = loader.load()
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
 
-    chunks = splitter.split_documents(docs)
+        chunks = splitter.split_documents(docs)
 
-    embedding_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+        Chroma.from_documents(
+            documents=chunks,
+            embedding=embedding_model,
+            persist_directory="Chroma_DB"
+        )
 
-    Chroma.from_documents(
-        documents=chunks,
-        embedding=embedding_model,
-        persist_directory="Chroma_DB"
-    )
+        return {
+            "msg": "PDF Uploaded Successfully"
+        }
 
-    return {
-        "msg": "PDF Uploaded Successfully"
-    }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
 
 
 @app.post("/ask")
 def ask_question(question: str = Query(...)):
 
-    embedding_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+    try:
+        if not GROQ_API_KEY:
+            return {
+                "answer": "GROQ_API_KEY is missing in Render environment variables."
+            }
 
-    db = Chroma(
-        persist_directory="Chroma_DB",
-        embedding_function=embedding_model
-    )
+        db = Chroma(
+            persist_directory="Chroma_DB",
+            embedding_function=embedding_model
+        )
 
-    retriever = db.as_retriever(
-        search_kwargs={"k": 3}
-    )
+        retriever = db.as_retriever(
+            search_kwargs={"k": 3}
+        )
 
-    docs = retriever.invoke(question)
+        docs = retriever.invoke(question)
 
-    if not docs:
+        if not docs:
+            return {
+                "answer": "No relevant information found in PDF."
+            }
+
+        context = "\n\n".join(
+            [doc.page_content for doc in docs]
+        )
+
+        llm = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            api_key=GROQ_API_KEY
+        )
+
+        prompt = f"""
+        Answer the question using only the given context.
+
+        Context:
+        {context}
+
+        Question:
+        {question}
+
+        Answer:
+        """
+
+        response = llm.invoke(prompt)
+
         return {
-            "answer": "No relevant information found in PDF."
+            "question": question,
+            "answer": response.content
         }
 
-    context = "\n\n".join(
-        [doc.page_content for doc in docs]
-    )
-
-    if not GROQ_API_KEY:
+    except Exception as e:
         return {
-            "answer": "GROQ_API_KEY is missing. Please add it in Render environment variables."
+            "answer": f"Backend error: {str(e)}"
         }
-
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=GROQ_API_KEY
-    )
-
-    prompt = f"""
-    Answer the question using only the given context.
-
-    Context:
-    {context}
-
-    Question:
-    {question}
-
-    Answer:
-    """
-
-    response = llm.invoke(prompt)
-
-    return {
-        "question": question,
-        "answer": response.content
-    }
