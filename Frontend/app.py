@@ -37,17 +37,24 @@ if not st.session_state.pdf_uploaded:
             try:
                 response = requests.post(
                     f"{server_url}/uploads",
-                    files=files
+                    files=files,
+                    timeout=300
                 )
 
                 if response.status_code == 200:
 
-                    st.success(
-                        response.json()["msg"]
-                    )
+                    data = response.json()
 
-                    st.session_state.pdf_uploaded = True
-                    st.rerun()
+                    if "msg" in data:
+                        st.success(data["msg"])
+                        st.session_state.pdf_uploaded = True
+                        st.rerun()
+
+                    elif "error" in data:
+                        st.error(data["error"])
+
+                    else:
+                        st.error(data)
 
                 else:
                     st.error(response.text)
@@ -88,15 +95,16 @@ if st.session_state.pdf_uploaded:
                 try:
                     response = requests.post(
                         f"{server_url}/ask",
-                        params={"question": question}
+                        params={"question": question},
+                        timeout=300
                     )
 
                     if response.status_code == 200:
 
-                        answer = response.json()["answer"]
+                        data = response.json()
+                        answer = data.get("answer", "No answer found")
 
                     else:
-
                         answer = "Backend Error"
 
                 except Exception as e:
