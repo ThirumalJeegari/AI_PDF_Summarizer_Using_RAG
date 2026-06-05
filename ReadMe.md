@@ -337,6 +337,12 @@ python-3.11.9
 This can happen when the backend crashes due to memory.
 Use lighter embeddings such as FastEmbed instead of heavy sentence-transformers.
 
+
+Frontend_URL(Render)= https://ai-pdf-summarizer-using-rag-frontend.onrender.com/
+
+Backend URL(Render) = https://ai-pdf-summarizer-using-rag.onrender.com/
+
+
 ## Author
 
 **Jeegari Thirumal**
